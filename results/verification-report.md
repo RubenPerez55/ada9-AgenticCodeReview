@@ -6,7 +6,7 @@ CR-02
 ## Environment
 Node version: v22.23.4 (npm 10.9.9), Linux
 Dependencies: express ^4.21.2, cors ^2.8.5; dev: eslint 9.17.0, @eslint/js, globals (installed with `npm ci --prefix backend`)
-Commit reviewed: 847bcdf (branch ada09/cr-02)
+Commit reviewed: fbd165b (branch ada09/cr-02)
 
 ## Checks
 
@@ -26,7 +26,7 @@ PASS
 
 ## Re-verification after Fix Cycle
 
-Commit reviewed: b0b7535 ("fix: address ADA-09 review findings")
+Commit reviewed: 1c5b0ef ("fix: address ADA-09 review findings")
 
 | Check | Command | Result | Evidence |
 |---|---|---|---|

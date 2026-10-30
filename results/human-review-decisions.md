@@ -1,7 +1,7 @@
 # Human Review Decisions
 
 ## Change
-CR-02 — commit reviewed `847bcdf` (branch `ada09/cr-02`)
+CR-02 — commit reviewed `fbd165b` (branch `ada09/cr-02`)
 Reviewer: Ruben Perez — 2026-10-30
 Input: `results/review-report.md` (0 MUST FIX, 1 SHOULD FIX, 3 OPTIONAL)
 
@@ -27,7 +27,7 @@ Reason: The risk of a shared comparator is already mitigated: unit tests assert 
 ### RF-04
 Reviewer severity: OPTIONAL
 Human decision: REJECTED
-Reason: The statement was true when written: the coder agent was not allowed to commit; the human created commit `847bcdf` afterwards (ADA step 11, see `results/run-context.md` and `results/commits.txt`). The reviewer misread the sequence of events; not a defect of the change.
+Reason: The statement was true when written: the coder agent was not allowed to commit; the human created commit `fbd165b` afterwards (ADA step 11, see `results/run-context.md` and `results/commits.txt`). The reviewer misread the sequence of events; not a defect of the change.
 
 ### Open questions from the reviewer
 - Error precedence when `min_rating` and `sort_by` are both invalid: both return 400; SPEC does not define precedence → no action (no requirement violated).

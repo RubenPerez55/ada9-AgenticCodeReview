@@ -3,7 +3,7 @@
 Change ID: CR-02
 Repository: ada-09-agentic-code-review (from ADA-08 agent-ready repository)
 Base branch: main
-Base commit: 4e7ffb1 ("docs: add approved CHANGE_REQUEST CR-02")
+Base commit: 1085cfa ("docs: add approved CHANGE_REQUEST CR-02")
 Work branch: ada09/cr-02
 
 ```
@@ -13,7 +13,7 @@ $ git status
 On branch ada09/cr-02
 nothing to commit, working tree clean
 $ git log -1 --oneline
-4e7ffb1 docs: add approved CHANGE_REQUEST CR-02
+1085cfa docs: add approved CHANGE_REQUEST CR-02
 ```
 
 Environment: Node v22.23.4, npm 10.9.9, Linux

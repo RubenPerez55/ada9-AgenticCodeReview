@@ -3,7 +3,7 @@
 ## Review Context
 Change ID: CR-02
 Branch / PR: ada09/cr-02 → main
-Commit reviewed: b0b7535 ("fix: address ADA-09 review findings"). The previous review covered 847bcdf.
+Commit reviewed: 1c5b0ef ("fix: address ADA-09 review findings"). The previous review covered fbd165b.
 Reviewer: Claude (Cowork) independent sub-agent
 Model: claude-opus-5-5
 Tools / permissions: Read-only on the repository. I used git log/diff/show, `./scripts/verify_repo.sh` and read-only `node -e` probes. For mutation checks I ran the test suite against modified copies of `backend/` placed in the scratchpad (`.../scratchpad/mut/`), not in the repository. The only file I wrote is `results/re-review-report.md`.
@@ -12,7 +12,7 @@ Inputs:
 - `results/review-report.md`
 - `results/human-review-decisions.md`
 - `results/pr.diff`
-- `results/fix-cycle.diff`: identical to `git diff 847bcdf b0b7535 -- backend` (checked with `diff`, output `FIXDIFF_SAME`)
+- `results/fix-cycle.diff`: identical to `git diff fbd165b 1c5b0ef -- backend` (checked with `diff`, output `FIXDIFF_SAME`)
 - `results/verification-report.md` § "Re-verification after Fix Cycle"
 - REQUIREMENTS.md FR-07, ARCHITECTURE.md, the code and the tests
 
@@ -36,7 +36,7 @@ Inputs:
 
 **No-op mutation check:** with `sortMovies` changed to return an unsorted copy (scratch copy only), 12 tests fail. These include all three new RF-01 tests: unit #7, unit #8 and HTTP "AC-07.6 search + sort_by reorders several matches".
 
-**Existing tests:** none was removed or weakened. `git diff 847bcdf b0b7535 -- backend/test | grep '^-[^-]'` produces no output, so the fix only adds lines.
+**Existing tests:** none was removed or weakened. `git diff fbd165b 1c5b0ef -- backend/test | grep '^-[^-]'` produces no output, so the fix only adds lines.
 
 ### RF-02: RESOLVED
 
@@ -49,7 +49,7 @@ Inputs:
 
 **Mutation check:** with the old predicate (`v.length > 0`) restored in a scratch copy, exactly 1 test fails, and it is the new RF-02 test (`# pass 73 / # fail 1`).
 
-**No change to the API contract:** all 16 fixture dates match the pattern. A probe of `sortMovies(catalog,'release_date')` returns `11,5,16,4,10,3,2,12,1,6,7,15,8,9,13,14`, the same order observed at 847bcdf.
+**No change to the API contract:** all 16 fixture dates match the pattern. A probe of `sortMovies(catalog,'release_date')` returns `11,5,16,4,10,3,2,12,1,6,7,15,8,9,13,14`, the same order observed at fbd165b.
 
 ### Rejected findings
 RF-03 and RF-04 were REJECTED by the human reviewer (see `results/human-review-decisions.md`). They were not re-reviewed.
@@ -58,14 +58,14 @@ RF-03 and RF-04 were REJECTED by the human reviewer (see `results/human-review-d
 None.
 
 I checked for regressions as follows:
-- **Protected paths and dependencies:** `git diff main b0b7535 -- REQUIREMENTS.md SPEC.md backend/data frontend backend/package.json` → 0 lines.
+- **Protected paths and dependencies:** `git diff main 1c5b0ef -- REQUIREMENTS.md SPEC.md backend/data frontend backend/package.json` → 0 lines.
 - **Scope of the code change:** the only production change in the fix cycle is the date predicate and its constant. `app.js` and the `parseSortBy` / `min_rating` logic were not touched.
 - **Fix-cycle tests:** the 4 new tests only add assertions.
 
 One non-blocking observation, not a finding: the pattern checks the date format, not whether the date exists on the calendar. For example, `'2024-13-45'` is still treated as a valid key. This matches both `validateMovie` and the human's required action ("only `YYYY-MM-DD` strings").
 
 ## Verification Evidence
-I ran `./scripts/verify_repo.sh` myself at b0b7535:
+I ran `./scripts/verify_repo.sh` myself at 1c5b0ef:
 - `# tests 74`, `# pass 74`, `# fail 0`
 - Lint passed, with no errors reported
 - `REPO_CONTRACT: PASS`

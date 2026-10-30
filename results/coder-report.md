@@ -3,7 +3,7 @@
 ## Change
 Change ID: CR-02
 Branch: ada09/cr-02
-Base commit: 4e7ffb1 ("docs: add approved CHANGE_REQUEST CR-02")
+Base commit: 1085cfa ("docs: add approved CHANGE_REQUEST CR-02")
 
 ## Requirements Covered
 - FR-07
@@ -132,7 +132,7 @@ This report is NOT an approval.
 
 ## Fix Cycle
 
-Input: `results/human-review-decisions.md` (review of commit `847bcdf`). This cycle covers only RF-01 (ACCEPTED) and RF-02 (MODIFIED). RF-03 and RF-04 were REJECTED, so they were not acted on. REQUIREMENTS.md, SPEC.md, the API contract and the frontend are unchanged. No existing test was modified or removed, and no dependency was added.
+Input: `results/human-review-decisions.md` (review of commit `fbd165b`). This cycle covers only RF-01 (ACCEPTED) and RF-02 (MODIFIED). RF-03 and RF-04 were REJECTED, so they were not acted on. REQUIREMENTS.md, SPEC.md, the API contract and the frontend are unchanged. No existing test was modified or removed, and no dependency was added.
 
 ### RF-01 — SHOULD FIX (ACCEPTED): AC-07.1/07.2/07.6 tests could pass with a no-op sort
 - Action taken: I added tests whose input is not already in the expected order, plus a `search` + `sort_by` case at unit and HTTP level. Each returns at least 2 movies in an order different from the input or catalog order. No production code changed for RF-01.

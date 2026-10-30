@@ -3,8 +3,8 @@
 ## Change
 Change ID: CR-02 — `sort_by` for `GET /api/movies`
 PR / Branch: `ada09/cr-02` → `main` (local PR candidate: `results/pr.diff`)
-Base commit: `4e7ffb1`
-Final commit: `b0b7535` (code) — evidence commits follow on the same branch
+Base commit: `1085cfa`
+Final commit: `1c5b0ef` (code) — evidence commits follow on the same branch
 
 ## Requirements / Acceptance Criteria
 - FR-07
@@ -14,9 +14,9 @@ Final commit: `b0b7535` (code) — evidence commits follow on the same branch
 Coder report: `results/coder-report.md` (includes Fix Cycle section)
 Files changed: `backend/services/movieService.js`, `backend/app.js`, `backend/test/movieService.test.js`, `backend/test/api.test.js`, `TASKS.md`
 Commits (`results/commits.txt`):
-- `847bcdf` feat: implement CR-02
-- `ce140ae` docs: verification, review contract, independent review, human decisions
-- `b0b7535` fix: address ADA-09 review findings
+- `fbd165b` feat: implement CR-02
+- `1a5ff7e` docs: verification, review contract, independent review, human decisions
+- `1c5b0ef` fix: address ADA-09 review findings
 
 ## Verification
 Verification command: `./scripts/verify_repo.sh`

@@ -2,8 +2,8 @@
 
 ## Review Context
 Change ID: CR-02
-Branch / PR: ada09/cr-02 → main (PR candidate; diff in `results/pr.diff`, confirmed byte-identical to `git diff main..847bcdf`)
-Commit reviewed: 847bcdf76d4f166c77a38397ed368e21fda15523 ("feat: implement CR-02")
+Branch / PR: ada09/cr-02 → main (PR candidate; diff in `results/pr.diff`, confirmed byte-identical to `git diff main..fbd165b`)
+Commit reviewed: fbd165b76d4f166c77a38397ed368e21fda15523 ("feat: implement CR-02")
 Reviewer agent: Claude (Cowork) independent sub-agent
 Model: claude-opus-5-5
 Tools / permissions: Read-only on code/tests/docs/config. Used git log/diff/show, grep, read-only `node -e` probes (service functions and the app in-process on port 0), `./scripts/verify_repo.sh`. Wrote only `results/review-contract.md` and `results/review-report.md`. No commits.
@@ -73,10 +73,10 @@ Recommended next step: Optionally replace the `expectedOrder` assertions with ha
 Category: documentation accuracy
 Requirement / AC: AGENTS.md Definition of Done (report accuracy)
 File / Line: `results/coder-report.md:123`
-Evidence: The report says "Nothing has been committed. The changes are left in the work tree for independent review." However, the report itself and all code changes are in commit `847bcdf` ("feat: implement CR-02").
+Evidence: The report says "Nothing has been committed. The changes are left in the work tree for independent review." However, the report itself and all code changes are in commit `fbd165b` ("feat: implement CR-02").
 Problem: The evidence artifact is stale and inconsistent with the git history.
 Risk: Confusing for the human reviewer's audit trail. There is no functional impact.
-Recommended next step: Update the statement, or note who committed and when (for example "committed by the orchestrator/human as 847bcdf after the coder run").
+Recommended next step: Update the statement, or note who committed and when (for example "committed by the orchestrator/human as fbd165b after the coder run").
 
 ## Missing Evidence / Open Questions
 - Error precedence when both `min_rating` and `sort_by` are invalid: `min_rating` is validated first (`app.js:37-45`), so its message wins. SPEC.md does not define this, and both cases return 400 `{ error }`, so it is acceptable. A human may want to confirm it or record it in SPEC.
