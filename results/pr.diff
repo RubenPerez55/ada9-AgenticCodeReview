@@ -1,0 +1,439 @@
+diff --git a/TASKS.md b/TASKS.md
+index f278413..19c6346 100644
+--- a/TASKS.md
++++ b/TASKS.md
+@@ -8,6 +8,6 @@
+ | T-04 Metrics | FR-04 | Done | `services/movieService.js#calculateCatalogMetrics` | movieService.test.js, api.test.js |
+ | T-05 Score presentation | FR-05 | Done | `services/movieService.js#formatMovieScore` | movieService.test.js |
+ | T-06 Minimum rating filter (CR-01) | FR-06 | Done | `services/movieService.js#parseMinRating`, `services/movieService.js#filterMovies`, `app.js` | movieService.test.js, api.test.js |
+-| T-07 Sort listings | FR-07 | To do | — | — |
++| T-07 Sort listings (CR-02) | FR-07 | Done (pending review) | `services/movieService.js#parseSortBy`, `services/movieService.js#sortMovies`, `app.js` | movieService.test.js, api.test.js |
+ 
+ Update the Status/Code/Tests columns when a task is completed (see AGENTS.md Definition of Done).
+diff --git a/backend/app.js b/backend/app.js
+index e06c1d9..8799e54 100644
+--- a/backend/app.js
++++ b/backend/app.js
+@@ -5,6 +5,8 @@ const fs = require('fs');
+ const {
+   filterMovies,
+   parseMinRating,
++  parseSortBy,
++  sortMovies,
+   calculateCatalogMetrics
+ } = require('./services/movieService');
+ 
+@@ -28,7 +30,7 @@ try {
+ 
+ // REST API Endpoints
+ 
+-// 1. Obtener todas las películas o filtrar por categoría, búsqueda, género o calificación mínima
++// 1. Obtener todas las películas o filtrar por categoría, búsqueda, género o calificación mínima, con orden opcional (sort_by)
+ app.get('/api/movies', (req, res) => {
+   const { category, search, genre } = req.query;
+ 
+@@ -37,12 +39,18 @@ app.get('/api/movies', (req, res) => {
+     return res.status(400).json({ error: minRating.error });
+   }
+ 
+-  const results = filterMovies(movies, {
++  const sortBy = parseSortBy(req.query.sort_by);
++  if (!sortBy.valid) {
++    return res.status(400).json({ error: sortBy.error });
++  }
++
++  const filtered = filterMovies(movies, {
+     category,
+     search,
+     genre,
+     minRating: minRating.value ?? undefined
+   });
++  const results = sortMovies(filtered, sortBy.value);
+ 
+   res.json({
+     total_results: results.length,
+diff --git a/backend/services/movieService.js b/backend/services/movieService.js
+index db161f3..1f496f8 100644
+--- a/backend/services/movieService.js
++++ b/backend/services/movieService.js
+@@ -88,6 +88,77 @@ function parseMinRating(raw) {
+   return { valid: true, value, error: null };
+ }
+ 
++/**
++ * Valores admitidos para el parámetro `sort_by` (FR-07) y el campo que ordena cada uno
++ */
++const SORT_FIELDS = {
++  rating: 'vote_average',
++  release_date: 'release_date'
++};
++
++/**
++ * Formato admitido para `release_date` como clave de orden (YYYY-MM-DD)
++ */
++const RELEASE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
++
++/**
++ * Analiza y valida el parámetro de consulta `sort_by` (FR-07, AC-07.4)
++ * Solo acepta exactamente 'rating' o 'release_date'.
++ * @param {*} raw - Valor crudo del query string (string, arreglo si se repite, o undefined)
++ * @returns {{ valid: boolean, value: string|null, error: string|null }}
++ *   Si el parámetro está ausente: { valid: true, value: null, error: null }
++ */
++function parseSortBy(raw) {
++  if (raw === undefined) {
++    return { valid: true, value: null, error: null };
++  }
++
++  if (typeof raw !== 'string' || !Object.prototype.hasOwnProperty.call(SORT_FIELDS, raw)) {
++    return {
++      valid: false,
++      value: null,
++      error: 'El parámetro "sort_by" debe ser "rating" o "release_date"'
++    };
++  }
++
++  return { valid: true, value: raw, error: null };
++}
++
++/**
++ * Ordena películas de forma descendente y estable (FR-07, AC-07.1, AC-07.2, AC-07.3)
++ * Devuelve un arreglo nuevo; no muta la entrada (NFR-02).
++ * Las películas sin valor válido en el campo de orden quedan al final, en su orden original.
++ * @param {Array} movies - Lista de películas (normalmente ya filtradas)
++ * @param {string|null} [sortBy] - 'rating' | 'release_date'; ausente ⇒ orden original
++ * @returns {Array} - Copia ordenada
++ */
++function sortMovies(movies = [], sortBy) {
++  if (!Array.isArray(movies)) return [];
++
++  const result = [...movies];
++  const field = sortBy && Object.prototype.hasOwnProperty.call(SORT_FIELDS, sortBy)
++    ? SORT_FIELDS[sortBy]
++    : null;
++  if (!field) return result;
++
++  // release_date solo es clave válida con formato YYYY-MM-DD (mismo formato que exige validateMovie)
++  const isValidKey = field === 'vote_average'
++    ? v => typeof v === 'number' && Number.isFinite(v)
++    : v => typeof v === 'string' && RELEASE_DATE_PATTERN.test(v);
++
++  // Array.prototype.sort es estable (ES2019+), por lo que los empates conservan el orden del catálogo
++  return result.sort((a, b) => {
++    const va = a ? a[field] : undefined;
++    const vb = b ? b[field] : undefined;
++    const okA = isValidKey(va);
++    const okB = isValidKey(vb);
++    if (!okA || !okB) return (okA ? 0 : 1) - (okB ? 0 : 1);
++    if (va === vb) return 0;
++    // Fechas YYYY-MM-DD se comparan correctamente como texto
++    return va > vb ? -1 : 1;
++  });
++}
++
+ /**
+  * Convierte una calificación numérica (0 a 10) a formato porcentaje e indicador de nivel
+  * @param {number} voteAverage - Calificación de 0 a 10
+@@ -220,6 +291,8 @@ function validateMovie(movie) {
+ module.exports = {
+   filterMovies,
+   parseMinRating,
++  parseSortBy,
++  sortMovies,
+   formatMovieScore,
+   formatDateSpanish,
+   calculateCatalogMetrics,
+diff --git a/backend/test/api.test.js b/backend/test/api.test.js
+index d5bdf72..a96bd37 100644
+--- a/backend/test/api.test.js
++++ b/backend/test/api.test.js
+@@ -1,4 +1,4 @@
+-// HTTP-level regression tests for the REST API (FR-01..FR-04).
++// HTTP-level regression tests for the REST API (FR-01..FR-04, FR-06, FR-07).
+ // The app is started in-process on a random port; no external server is needed.
+ const { describe, it, before, after } = require('node:test');
+ const assert = require('node:assert/strict');
+@@ -121,6 +121,127 @@ describe('API: GET /api/movies?min_rating (FR-06)', () => {
+   });
+ });
+ 
++describe('API: GET /api/movies?sort_by (FR-07)', () => {
++  // Orden esperado calculado de forma independiente: descendente y estable (índice del catálogo como desempate)
++  const expectedOrder = (list, key) => list
++    .map((m, i) => ({ m, i }))
++    .sort((a, b) => {
++      if (a.m[key] === b.m[key]) return a.i - b.i;
++      return a.m[key] > b.m[key] ? -1 : 1;
++    })
++    .map(({ m }) => m.id);
++
++  it('AC-07.1 sort_by=rating orders results by vote_average descending', async () => {
++    const { status, body } = await get('/api/movies?sort_by=rating');
++    assert.equal(status, 200);
++    assert.equal(body.total_results, catalog.length);
++    assert.equal(body.results.length, catalog.length);
++    for (let i = 1; i < body.results.length; i++) {
++      assert.ok(body.results[i - 1].vote_average >= body.results[i].vote_average);
++    }
++    assert.deepEqual(body.results.map(m => m.id), expectedOrder(catalog, 'vote_average'));
++  });
++
++  it('AC-07.2 sort_by=release_date orders results newest first', async () => {
++    const { status, body } = await get('/api/movies?sort_by=release_date');
++    assert.equal(status, 200);
++    assert.equal(body.total_results, catalog.length);
++    for (let i = 1; i < body.results.length; i++) {
++      assert.ok(body.results[i - 1].release_date >= body.results[i].release_date);
++    }
++    assert.deepEqual(body.results.map(m => m.id), expectedOrder(catalog, 'release_date'));
++  });
++
++  it('AC-07.3 ties keep the original catalog order (stable sort)', async () => {
++    const { body } = await get('/api/movies?sort_by=rating');
++    const ids = body.results.map(m => m.id);
++    const scores = new Set(catalog.map(m => m.vote_average));
++    let tieGroups = 0;
++    for (const score of scores) {
++      const catalogIds = catalog.filter(m => m.vote_average === score).map(m => m.id);
++      if (catalogIds.length < 2) continue;
++      tieGroups++;
++      const responseIds = ids.filter(id => catalogIds.includes(id));
++      assert.deepEqual(responseIds, catalogIds, `ties for vote_average=${score} must keep catalog order`);
++    }
++    assert.ok(tieGroups > 0, 'the fixture must contain ties to verify stability');
++  });
++
++  for (const raw of ['title', '', 'RATING', 'vote_average', 'release-date']) {
++    it(`AC-07.4 returns 400 with { error } and no results for sort_by=${JSON.stringify(raw)}`, async () => {
++      const { status, body } = await get(`/api/movies?sort_by=${encodeURIComponent(raw)}`);
++      assert.equal(status, 400);
++      assert.equal(typeof body.error, 'string');
++      assert.ok(body.error.length > 0);
++      assert.equal(body.results, undefined);
++      assert.equal(body.total_results, undefined);
++    });
++  }
++
++  it('AC-07.4 returns 400 for a repeated sort_by parameter', async () => {
++    const { status, body } = await get('/api/movies?sort_by=rating&sort_by=release_date');
++    assert.equal(status, 400);
++    assert.ok(body.error);
++    assert.equal(body.results, undefined);
++  });
++
++  it('AC-07.5 without sort_by the original catalog order is preserved', async () => {
++    const { status, body } = await get('/api/movies');
++    assert.equal(status, 200);
++    assert.deepEqual(body.results, catalog);
++  });
++
++  it('AC-07.6 sort_by combines with FR-01 / FR-06 filters; sorting is applied after filtering', async () => {
++    const { status, body } = await get('/api/movies?category=popular&genre=drama&min_rating=7&sort_by=rating');
++    const filtered = catalog.filter(m =>
++      m.category.includes('popular') &&
++      m.genres.some(g => g.toLowerCase() === 'drama') &&
++      m.vote_average >= 7);
++    assert.equal(status, 200);
++    assert.ok(filtered.length > 1);
++    assert.equal(body.total_results, filtered.length);
++    assert.deepEqual(body.results.map(m => m.id), expectedOrder(filtered, 'vote_average'));
++
++    const byDate = await get('/api/movies?category=top_rated&sort_by=release_date');
++    const topRated = catalog.filter(m => m.category.includes('top_rated'));
++    assert.deepEqual(byDate.body.results.map(m => m.id), expectedOrder(topRated, 'release_date'));
++
++    const term = catalog[0].title;
++    const withSearch = await get(`/api/movies?search=${encodeURIComponent(term)}&sort_by=rating`);
++    const searched = catalog.filter(m =>
++      [m.title, m.original_title, m.overview].some(f => f && f.toLowerCase().includes(term.toLowerCase())));
++    assert.deepEqual(withSearch.body.results.map(m => m.id), expectedOrder(searched, 'vote_average'));
++  });
++
++  it('AC-07.6 search + sort_by reorders several matches (order differs from catalog order)', async () => {
++    const term = 'regresa';
++    const searched = catalog.filter(m =>
++      [m.title, m.original_title, m.overview].some(f => f && f.toLowerCase().includes(term)));
++    const expected = expectedOrder(searched, 'vote_average');
++    assert.ok(searched.length >= 2, 'the search must return at least 2 movies');
++    assert.notDeepEqual(expected, searched.map(m => m.id), 'expected order must differ from catalog order');
++
++    const { status, body } = await get(`/api/movies?search=${term}&sort_by=rating`);
++    assert.equal(status, 200);
++    assert.equal(body.total_results, searched.length);
++    assert.deepEqual(body.results.map(m => m.id), expected);
++  });
++
++  it('AC-07.6 an invalid min_rating still returns 400 when sort_by is valid', async () => {
++    const { status, body } = await get('/api/movies?min_rating=abc&sort_by=rating');
++    assert.equal(status, 400);
++    assert.ok(body.error);
++    assert.equal(body.results, undefined);
++  });
++
++  it('NFR-02 a sort_by request does not mutate the in-memory catalog order', async () => {
++    await get('/api/movies?sort_by=rating');
++    await get('/api/movies?sort_by=release_date');
++    const { body } = await get('/api/movies');
++    assert.deepEqual(body.results.map(m => m.id), catalog.map(m => m.id));
++  });
++});
++
+ describe('API: GET /api/movies/:id (FR-02)', () => {
+   it('AC-02.1 returns the movie detail', async () => {
+     const { status, body } = await get(`/api/movies/${catalog[0].id}`);
+diff --git a/backend/test/movieService.test.js b/backend/test/movieService.test.js
+index f5600ef..b054f1b 100644
+--- a/backend/test/movieService.test.js
++++ b/backend/test/movieService.test.js
+@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
+ const {
+   filterMovies,
+   parseMinRating,
++  parseSortBy,
++  sortMovies,
+   formatMovieScore,
+   formatDateSpanish,
+   calculateCatalogMetrics,
+@@ -178,6 +180,142 @@ describe('Pruebas Unitarias: movieService', () => {
+     });
+   });
+ 
++  describe('sortMovies()', () => {
++    // Catálogo con empates en vote_average y release_date para verificar estabilidad
++    const tieMovies = [
++      { id: 10, vote_average: 7.0, release_date: '2020-01-01' },
++      { id: 11, vote_average: 8.5, release_date: '2022-05-05' },
++      { id: 12, vote_average: 7.0, release_date: '2024-02-02' },
++      { id: 13, vote_average: 8.5, release_date: '2020-01-01' },
++      { id: 14, vote_average: 9.1, release_date: '2022-05-05' }
++    ];
++
++    it('AC-07.1 ordena por vote_average descendente con sortBy="rating"', () => {
++      assert.deepEqual(sortMovies(mockMovies, 'rating').map(m => m.id), [1, 2, 3, 4]);
++      const scores = sortMovies(tieMovies, 'rating').map(m => m.vote_average);
++      assert.deepEqual(scores, [...scores].sort((a, b) => b - a));
++    });
++
++    it('AC-07.2 ordena por release_date descendente (más reciente primero) con sortBy="release_date"', () => {
++      assert.deepEqual(sortMovies(mockMovies, 'release_date').map(m => m.id), [3, 2, 1, 4]);
++    });
++
++    it('AC-07.3 los empates conservan el orden original (orden estable)', () => {
++      assert.deepEqual(sortMovies(tieMovies, 'rating').map(m => m.id), [14, 11, 13, 10, 12]);
++      assert.deepEqual(sortMovies(tieMovies, 'release_date').map(m => m.id), [12, 11, 14, 10, 13]);
++    });
++
++    it('AC-07.5 sin sortBy se conserva el orden original', () => {
++      assert.deepEqual(sortMovies(mockMovies), mockMovies);
++      assert.deepEqual(sortMovies(mockMovies, null), mockMovies);
++      assert.deepEqual(sortMovies(mockMovies, undefined), mockMovies);
++    });
++
++    it('AC-07.6 se aplica después de filtrar (combina con categoría, género, búsqueda y minRating)', () => {
++      const filtered = filterMovies(mockMovies, { category: 'popular', minRating: 5 });
++      assert.deepEqual(sortMovies(filtered, 'rating').map(m => m.id), [1, 2, 3]);
++      assert.deepEqual(sortMovies(filtered, 'release_date').map(m => m.id), [3, 2, 1]);
++      assert.deepEqual(
++        sortMovies(filterMovies(mockMovies, { genre: 'Drama' }), 'release_date').map(m => m.id),
++        [3, 4]
++      );
++      assert.deepEqual(
++        sortMovies(filterMovies(mockMovies, { search: 'zzz-sin-coincidencias' }), 'rating'),
++        []
++      );
++    });
++
++    it('películas sin valor de orden válido quedan al final en su orden original', () => {
++      const partial = [
++        { id: 1, vote_average: null, release_date: '' },
++        { id: 2, vote_average: 6, release_date: '2021-01-01' },
++        { id: 3 },
++        { id: 4, vote_average: 9, release_date: '2023-01-01' }
++      ];
++      assert.deepEqual(sortMovies(partial, 'rating').map(m => m.id), [4, 2, 1, 3]);
++      assert.deepEqual(sortMovies(partial, 'release_date').map(m => m.id), [4, 2, 1, 3]);
++    });
++
++    // RF-01: entradas que NO están ya en el orden esperado, para que un orden no-op falle
++    const unsortedMovies = [
++      { id: 21, title: 'Saga Espacial I', vote_average: 6.1, release_date: '2019-05-01' },
++      { id: 22, title: 'Otra Película', vote_average: 9.0, release_date: '2018-01-01' },
++      { id: 23, title: 'Saga Espacial II', vote_average: 8.3, release_date: '2023-03-03' },
++      { id: 24, title: 'Saga Espacial III', vote_average: 7.2, release_date: '2025-01-01' }
++    ];
++
++    it('AC-07.1 / AC-07.2 reordena una entrada que no está en el orden esperado', () => {
++      const shuffled = [mockMovies[3], mockMovies[1], mockMovies[0], mockMovies[2]];
++      assert.deepEqual(shuffled.map(m => m.id), [4, 2, 1, 3]);
++      assert.deepEqual(sortMovies(shuffled, 'rating').map(m => m.id), [1, 2, 3, 4]);
++      assert.deepEqual(sortMovies(shuffled, 'release_date').map(m => m.id), [3, 2, 1, 4]);
++
++      assert.deepEqual(sortMovies(unsortedMovies, 'rating').map(m => m.id), [22, 23, 24, 21]);
++      assert.deepEqual(sortMovies(unsortedMovies, 'release_date').map(m => m.id), [24, 23, 21, 22]);
++    });
++
++    it('AC-07.6 search + sortBy ordena los resultados filtrados (orden distinto al de entrada)', () => {
++      const searched = filterMovies(unsortedMovies, { search: 'saga' });
++      assert.deepEqual(searched.map(m => m.id), [21, 23, 24]);
++      assert.deepEqual(sortMovies(searched, 'rating').map(m => m.id), [23, 24, 21]);
++      assert.deepEqual(sortMovies(searched, 'release_date').map(m => m.id), [24, 23, 21]);
++    });
++
++    it('RF-02 release_date sin formato YYYY-MM-DD queda al final en su orden original', () => {
++      const badDates = [
++        { id: 31, release_date: 'abc' },
++        { id: 32, release_date: '2021-01-01' },
++        { id: 33, release_date: '01/03/2024' },
++        { id: 34, release_date: '2024-3-1' },
++        { id: 35, release_date: '2023-06-15' },
++        { id: 36, release_date: 20240101 },
++        { id: 37, release_date: '2024-03-01T00:00:00Z' }
++      ];
++      assert.deepEqual(
++        sortMovies(badDates, 'release_date').map(m => m.id),
++        [35, 32, 31, 33, 34, 36, 37]
++      );
++    });
++
++    it('debe manejar entradas inválidas sin lanzar error', () => {
++      assert.deepEqual(sortMovies(null, 'rating'), []);
++      assert.deepEqual(sortMovies('no-es-arreglo', 'rating'), []);
++    });
++
++    it('NFR-02 ordenar no muta el arreglo de entrada y devuelve una copia', () => {
++      const snapshot = JSON.parse(JSON.stringify(tieMovies));
++      const sorted = sortMovies(tieMovies, 'rating');
++      assert.notEqual(sorted, tieMovies);
++      assert.deepEqual(tieMovies, snapshot);
++      assert.notEqual(sortMovies(tieMovies), tieMovies);
++    });
++  });
++
++  describe('parseSortBy()', () => {
++    it('AC-07.5 parámetro ausente es válido y sin efecto', () => {
++      assert.deepEqual(parseSortBy(undefined), { valid: true, value: null, error: null });
++    });
++
++    it('AC-07.1 / AC-07.2 acepta "rating" y "release_date"', () => {
++      assert.deepEqual(parseSortBy('rating'), { valid: true, value: 'rating', error: null });
++      assert.deepEqual(parseSortBy('release_date'), { valid: true, value: 'release_date', error: null });
++    });
++
++    it('AC-07.4 rechaza cualquier otro valor', () => {
++      const invalidInputs = [
++        'title', '', ' ', 'RATING', 'Rating', ' rating', 'rating ', 'release-date',
++        'vote_average', 'toString', '__proto__', ['rating', 'release_date'], { a: '1' }, null, 7
++      ];
++      for (const raw of invalidInputs) {
++        const parsed = parseSortBy(raw);
++        assert.equal(parsed.valid, false, `${JSON.stringify(raw)} debería ser inválido`);
++        assert.equal(parsed.value, null);
++        assert.equal(typeof parsed.error, 'string');
++        assert.ok(parsed.error.length > 0);
++      }
++    });
++  });
++
+   describe('formatMovieScore()', () => {
+     it('debe convertir calificación alta (>= 7.0) a porcentaje verde', () => {
+       const score = formatMovieScore(8.2);
