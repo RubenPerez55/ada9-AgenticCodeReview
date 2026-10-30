@@ -21,3 +21,18 @@ Full gate: `./scripts/verify_repo.sh` → exit code 0, `VERIFY_REPO: PASS`.
 
 ## Overall Gate
 PASS
+
+---
+
+## Re-verification after Fix Cycle
+
+Commit reviewed: b0b7535 ("fix: address ADA-09 review findings")
+
+| Check | Command | Result | Evidence |
+|---|---|---|---|
+| Tests | `npm test` | PASS | 74 tests, 74 pass, 0 fail (+4: RF-01 ×3, RF-02 ×1) |
+| Lint | `npm run lint` | PASS | 0 problems |
+| Repo contract | `node scripts/check_repo_contract.js` | PASS | `REPO_CONTRACT: PASS` |
+| Security | `node scripts/check_secrets.js` | PASS | `SECURITY_CHECK: PASS` |
+
+Overall Gate: PASS
