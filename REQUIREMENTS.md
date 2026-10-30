@@ -39,7 +39,7 @@ Status legend: **Implemented** = present in code; **Planned** = approved, not im
 - AC-06.3: A `min_rating` that is not a number, or is outside 0–10, returns HTTP 400 with `{ error }` and no results.
 - AC-06.4: When `min_rating` is absent, the behavior of FR-01 is unchanged.
 
-### FR-07 — Sort movie listings (Planned)
+### FR-07 — Sort movie listings (Implemented)
 `GET /api/movies` accepts an optional `sort_by` query parameter.
 - AC-07.1: `sort_by=rating` returns results ordered by `vote_average` descending.
 - AC-07.2: `sort_by=release_date` returns results ordered by `release_date` descending (newest first).
