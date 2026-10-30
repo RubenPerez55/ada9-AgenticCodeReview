@@ -213,6 +213,20 @@ describe('API: GET /api/movies?sort_by (FR-07)', () => {
     assert.deepEqual(withSearch.body.results.map(m => m.id), expectedOrder(searched, 'vote_average'));
   });
 
+  it('AC-07.6 search + sort_by reorders several matches (order differs from catalog order)', async () => {
+    const term = 'regresa';
+    const searched = catalog.filter(m =>
+      [m.title, m.original_title, m.overview].some(f => f && f.toLowerCase().includes(term)));
+    const expected = expectedOrder(searched, 'vote_average');
+    assert.ok(searched.length >= 2, 'the search must return at least 2 movies');
+    assert.notDeepEqual(expected, searched.map(m => m.id), 'expected order must differ from catalog order');
+
+    const { status, body } = await get(`/api/movies?search=${term}&sort_by=rating`);
+    assert.equal(status, 200);
+    assert.equal(body.total_results, searched.length);
+    assert.deepEqual(body.results.map(m => m.id), expected);
+  });
+
   it('AC-07.6 an invalid min_rating still returns 400 when sort_by is valid', async () => {
     const { status, body } = await get('/api/movies?min_rating=abc&sort_by=rating');
     assert.equal(status, 400);

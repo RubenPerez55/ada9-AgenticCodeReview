@@ -236,6 +236,47 @@ describe('Pruebas Unitarias: movieService', () => {
       assert.deepEqual(sortMovies(partial, 'release_date').map(m => m.id), [4, 2, 1, 3]);
     });
 
+    // RF-01: entradas que NO están ya en el orden esperado, para que un orden no-op falle
+    const unsortedMovies = [
+      { id: 21, title: 'Saga Espacial I', vote_average: 6.1, release_date: '2019-05-01' },
+      { id: 22, title: 'Otra Película', vote_average: 9.0, release_date: '2018-01-01' },
+      { id: 23, title: 'Saga Espacial II', vote_average: 8.3, release_date: '2023-03-03' },
+      { id: 24, title: 'Saga Espacial III', vote_average: 7.2, release_date: '2025-01-01' }
+    ];
+
+    it('AC-07.1 / AC-07.2 reordena una entrada que no está en el orden esperado', () => {
+      const shuffled = [mockMovies[3], mockMovies[1], mockMovies[0], mockMovies[2]];
+      assert.deepEqual(shuffled.map(m => m.id), [4, 2, 1, 3]);
+      assert.deepEqual(sortMovies(shuffled, 'rating').map(m => m.id), [1, 2, 3, 4]);
+      assert.deepEqual(sortMovies(shuffled, 'release_date').map(m => m.id), [3, 2, 1, 4]);
+
+      assert.deepEqual(sortMovies(unsortedMovies, 'rating').map(m => m.id), [22, 23, 24, 21]);
+      assert.deepEqual(sortMovies(unsortedMovies, 'release_date').map(m => m.id), [24, 23, 21, 22]);
+    });
+
+    it('AC-07.6 search + sortBy ordena los resultados filtrados (orden distinto al de entrada)', () => {
+      const searched = filterMovies(unsortedMovies, { search: 'saga' });
+      assert.deepEqual(searched.map(m => m.id), [21, 23, 24]);
+      assert.deepEqual(sortMovies(searched, 'rating').map(m => m.id), [23, 24, 21]);
+      assert.deepEqual(sortMovies(searched, 'release_date').map(m => m.id), [24, 23, 21]);
+    });
+
+    it('RF-02 release_date sin formato YYYY-MM-DD queda al final en su orden original', () => {
+      const badDates = [
+        { id: 31, release_date: 'abc' },
+        { id: 32, release_date: '2021-01-01' },
+        { id: 33, release_date: '01/03/2024' },
+        { id: 34, release_date: '2024-3-1' },
+        { id: 35, release_date: '2023-06-15' },
+        { id: 36, release_date: 20240101 },
+        { id: 37, release_date: '2024-03-01T00:00:00Z' }
+      ];
+      assert.deepEqual(
+        sortMovies(badDates, 'release_date').map(m => m.id),
+        [35, 32, 31, 33, 34, 36, 37]
+      );
+    });
+
     it('debe manejar entradas inválidas sin lanzar error', () => {
       assert.deepEqual(sortMovies(null, 'rating'), []);
       assert.deepEqual(sortMovies('no-es-arreglo', 'rating'), []);

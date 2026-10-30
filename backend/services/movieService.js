@@ -97,6 +97,11 @@ const SORT_FIELDS = {
 };
 
 /**
+ * Formato admitido para `release_date` como clave de orden (YYYY-MM-DD)
+ */
+const RELEASE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
  * Analiza y valida el parámetro de consulta `sort_by` (FR-07, AC-07.4)
  * Solo acepta exactamente 'rating' o 'release_date'.
  * @param {*} raw - Valor crudo del query string (string, arreglo si se repite, o undefined)
@@ -136,9 +141,10 @@ function sortMovies(movies = [], sortBy) {
     : null;
   if (!field) return result;
 
+  // release_date solo es clave válida con formato YYYY-MM-DD (mismo formato que exige validateMovie)
   const isValidKey = field === 'vote_average'
     ? v => typeof v === 'number' && Number.isFinite(v)
-    : v => typeof v === 'string' && v.length > 0;
+    : v => typeof v === 'string' && RELEASE_DATE_PATTERN.test(v);
 
   // Array.prototype.sort es estable (ES2019+), por lo que los empates conservan el orden del catálogo
   return result.sort((a, b) => {

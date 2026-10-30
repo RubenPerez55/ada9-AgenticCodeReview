@@ -129,3 +129,47 @@ git diff --stat; git diff backend/app.js; git diff backend/test | grep '^-'
 [x] Ready for independent review
 
 This report is NOT an approval.
+
+## Fix Cycle
+
+Input: `results/human-review-decisions.md` (review of commit `847bcdf`). This cycle covers only RF-01 (ACCEPTED) and RF-02 (MODIFIED). RF-03 and RF-04 were REJECTED, so they were not acted on. REQUIREMENTS.md, SPEC.md, the API contract and the frontend are unchanged. No existing test was modified or removed, and no dependency was added.
+
+### RF-01 — SHOULD FIX (ACCEPTED): AC-07.1/07.2/07.6 tests could pass with a no-op sort
+- Action taken: I added tests whose input is not already in the expected order, plus a `search` + `sort_by` case at unit and HTTP level. Each returns at least 2 movies in an order different from the input or catalog order. No production code changed for RF-01.
+- Files and lines changed:
+  - `backend/test/movieService.test.js` lines 239-279 (inside `describe('sortMovies()')`): new fixture `unsortedMovies` and the new tests below.
+  - `backend/test/api.test.js` lines 216-229 (inside `describe('API: GET /api/movies?sort_by (FR-07)')`): one new test.
+- Tests added:
+  - Unit `AC-07.1 / AC-07.2 reordena una entrada que no está en el orden esperado`: a shuffled copy of `mockMovies` (ids `[4, 2, 1, 3]`) must give `[1, 2, 3, 4]` by rating and `[3, 2, 1, 4]` by date. `unsortedMovies` must give `[22, 23, 24, 21]` by rating and `[24, 23, 21, 22]` by date.
+  - Unit `AC-07.6 search + sortBy ordena los resultados filtrados (orden distinto al de entrada)`: `search: 'saga'` returns `[21, 23, 24]`, which sorts to `[23, 24, 21]` by rating and `[24, 23, 21]` by date.
+  - HTTP `AC-07.6 search + sort_by reorders several matches (order differs from catalog order)`: `GET /api/movies?search=regresa&sort_by=rating` matches catalog ids `[2, 7, 9]` and must return `[9, 7, 2]`. The test first asserts that there are at least 2 matches and that the expected order differs from catalog order, so it fails loudly rather than passing silently if the fixture changes.
+- Evidence: with `sortMovies` temporarily forced to return its input unsorted (a local mutation, reverted afterwards), all three new tests fail, along with the existing sort tests.
+
+### RF-02 — SHOULD FIX (MODIFIED): `sortMovies` accepted any non-empty string as a `release_date` key
+- Action taken: only strings in `YYYY-MM-DD` format, the same pattern `validateMovie` uses, are now valid `release_date` sort keys. Any other value goes last, in its original order, as the existing doc comment already said. The API contract is unchanged.
+- Files and lines changed: `backend/services/movieService.js`
+  - Lines 99-103: new constant `RELEASE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/`.
+  - Lines 144 and 147: the `release_date` check in `isValidKey` now uses `RELEASE_DATE_PATTERN.test(v)` instead of `v.length > 0`, with a comment.
+- Tests added: unit `RF-02 release_date sin formato YYYY-MM-DD queda al final en su orden original` in `backend/test/movieService.test.js`. It mixes valid dates with `'abc'`, `'01/03/2024'`, `'2024-3-1'`, the number `20240101` and `'2024-03-01T00:00:00Z'`. Expected order: `[35, 32, 31, 33, 34, 36, 37]`.
+- Evidence: against the pre-fix `movieService.js` from `HEAD`, this test fails (37 pass, 1 fail). The cause is that `'abc'` sorted ahead of the real dates.
+
+### Commands Executed
+- `node --test test/movieService.test.js` (in `backend/`), run against the `HEAD` version of `movieService.js` to confirm the RF-02 test fails before the fix. The file was restored afterwards.
+- `node --test` (in `backend/`), run with a temporary no-op `sortMovies` to confirm the RF-01 tests detect it. The file was restored afterwards.
+- `./scripts/verify_repo.sh`
+
+### Verification Result
+`./scripts/verify_repo.sh` printed:
+- `[1/4] Tests`: 74 tests, 74 pass, 0 fail. That is 70 tests before this cycle plus 4 new ones.
+- `[2/4] Lint`: no errors
+- `[3/4] Repository contract`: `REPO_CONTRACT: PASS`
+- `[4/4] Security check`: `SECURITY_CHECK: PASS`
+- Final line: `VERIFY_REPO: PASS`
+
+### Fix Cycle Self-Check
+[x] Only RF-01 and RF-02 addressed; RF-03 and RF-04 not acted on
+[x] Requirements and specification not changed
+[x] Existing tests not weakened, modified or removed
+[x] Nothing committed; changes are left in the work tree for re-review
+
+This Fix Cycle is NOT an approval. A human decision or re-review is still required.
