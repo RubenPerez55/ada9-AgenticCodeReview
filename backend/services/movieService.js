@@ -89,6 +89,71 @@ function parseMinRating(raw) {
 }
 
 /**
+ * Valores admitidos para el parámetro `sort_by` (FR-07) y el campo que ordena cada uno
+ */
+const SORT_FIELDS = {
+  rating: 'vote_average',
+  release_date: 'release_date'
+};
+
+/**
+ * Analiza y valida el parámetro de consulta `sort_by` (FR-07, AC-07.4)
+ * Solo acepta exactamente 'rating' o 'release_date'.
+ * @param {*} raw - Valor crudo del query string (string, arreglo si se repite, o undefined)
+ * @returns {{ valid: boolean, value: string|null, error: string|null }}
+ *   Si el parámetro está ausente: { valid: true, value: null, error: null }
+ */
+function parseSortBy(raw) {
+  if (raw === undefined) {
+    return { valid: true, value: null, error: null };
+  }
+
+  if (typeof raw !== 'string' || !Object.prototype.hasOwnProperty.call(SORT_FIELDS, raw)) {
+    return {
+      valid: false,
+      value: null,
+      error: 'El parámetro "sort_by" debe ser "rating" o "release_date"'
+    };
+  }
+
+  return { valid: true, value: raw, error: null };
+}
+
+/**
+ * Ordena películas de forma descendente y estable (FR-07, AC-07.1, AC-07.2, AC-07.3)
+ * Devuelve un arreglo nuevo; no muta la entrada (NFR-02).
+ * Las películas sin valor válido en el campo de orden quedan al final, en su orden original.
+ * @param {Array} movies - Lista de películas (normalmente ya filtradas)
+ * @param {string|null} [sortBy] - 'rating' | 'release_date'; ausente ⇒ orden original
+ * @returns {Array} - Copia ordenada
+ */
+function sortMovies(movies = [], sortBy) {
+  if (!Array.isArray(movies)) return [];
+
+  const result = [...movies];
+  const field = sortBy && Object.prototype.hasOwnProperty.call(SORT_FIELDS, sortBy)
+    ? SORT_FIELDS[sortBy]
+    : null;
+  if (!field) return result;
+
+  const isValidKey = field === 'vote_average'
+    ? v => typeof v === 'number' && Number.isFinite(v)
+    : v => typeof v === 'string' && v.length > 0;
+
+  // Array.prototype.sort es estable (ES2019+), por lo que los empates conservan el orden del catálogo
+  return result.sort((a, b) => {
+    const va = a ? a[field] : undefined;
+    const vb = b ? b[field] : undefined;
+    const okA = isValidKey(va);
+    const okB = isValidKey(vb);
+    if (!okA || !okB) return (okA ? 0 : 1) - (okB ? 0 : 1);
+    if (va === vb) return 0;
+    // Fechas YYYY-MM-DD se comparan correctamente como texto
+    return va > vb ? -1 : 1;
+  });
+}
+
+/**
  * Convierte una calificación numérica (0 a 10) a formato porcentaje e indicador de nivel
  * @param {number} voteAverage - Calificación de 0 a 10
  * @returns {{ percentage: number, ratingLevel: 'high'|'medium'|'low', color: string }}
@@ -220,6 +285,8 @@ function validateMovie(movie) {
 module.exports = {
   filterMovies,
   parseMinRating,
+  parseSortBy,
+  sortMovies,
   formatMovieScore,
   formatDateSpanish,
   calculateCatalogMetrics,

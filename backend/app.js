@@ -5,6 +5,8 @@ const fs = require('fs');
 const {
   filterMovies,
   parseMinRating,
+  parseSortBy,
+  sortMovies,
   calculateCatalogMetrics
 } = require('./services/movieService');
 
@@ -28,7 +30,7 @@ try {
 
 // REST API Endpoints
 
-// 1. Obtener todas las películas o filtrar por categoría, búsqueda, género o calificación mínima
+// 1. Obtener todas las películas o filtrar por categoría, búsqueda, género o calificación mínima, con orden opcional (sort_by)
 app.get('/api/movies', (req, res) => {
   const { category, search, genre } = req.query;
 
@@ -37,12 +39,18 @@ app.get('/api/movies', (req, res) => {
     return res.status(400).json({ error: minRating.error });
   }
 
-  const results = filterMovies(movies, {
+  const sortBy = parseSortBy(req.query.sort_by);
+  if (!sortBy.valid) {
+    return res.status(400).json({ error: sortBy.error });
+  }
+
+  const filtered = filterMovies(movies, {
     category,
     search,
     genre,
     minRating: minRating.value ?? undefined
   });
+  const results = sortMovies(filtered, sortBy.value);
 
   res.json({
     total_results: results.length,

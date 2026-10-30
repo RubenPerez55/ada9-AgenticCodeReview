@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const {
   filterMovies,
   parseMinRating,
+  parseSortBy,
+  sortMovies,
   formatMovieScore,
   formatDateSpanish,
   calculateCatalogMetrics,
@@ -170,6 +172,101 @@ describe('Pruebas Unitarias: movieService', () => {
       ];
       for (const raw of invalidInputs) {
         const parsed = parseMinRating(raw);
+        assert.equal(parsed.valid, false, `${JSON.stringify(raw)} debería ser inválido`);
+        assert.equal(parsed.value, null);
+        assert.equal(typeof parsed.error, 'string');
+        assert.ok(parsed.error.length > 0);
+      }
+    });
+  });
+
+  describe('sortMovies()', () => {
+    // Catálogo con empates en vote_average y release_date para verificar estabilidad
+    const tieMovies = [
+      { id: 10, vote_average: 7.0, release_date: '2020-01-01' },
+      { id: 11, vote_average: 8.5, release_date: '2022-05-05' },
+      { id: 12, vote_average: 7.0, release_date: '2024-02-02' },
+      { id: 13, vote_average: 8.5, release_date: '2020-01-01' },
+      { id: 14, vote_average: 9.1, release_date: '2022-05-05' }
+    ];
+
+    it('AC-07.1 ordena por vote_average descendente con sortBy="rating"', () => {
+      assert.deepEqual(sortMovies(mockMovies, 'rating').map(m => m.id), [1, 2, 3, 4]);
+      const scores = sortMovies(tieMovies, 'rating').map(m => m.vote_average);
+      assert.deepEqual(scores, [...scores].sort((a, b) => b - a));
+    });
+
+    it('AC-07.2 ordena por release_date descendente (más reciente primero) con sortBy="release_date"', () => {
+      assert.deepEqual(sortMovies(mockMovies, 'release_date').map(m => m.id), [3, 2, 1, 4]);
+    });
+
+    it('AC-07.3 los empates conservan el orden original (orden estable)', () => {
+      assert.deepEqual(sortMovies(tieMovies, 'rating').map(m => m.id), [14, 11, 13, 10, 12]);
+      assert.deepEqual(sortMovies(tieMovies, 'release_date').map(m => m.id), [12, 11, 14, 10, 13]);
+    });
+
+    it('AC-07.5 sin sortBy se conserva el orden original', () => {
+      assert.deepEqual(sortMovies(mockMovies), mockMovies);
+      assert.deepEqual(sortMovies(mockMovies, null), mockMovies);
+      assert.deepEqual(sortMovies(mockMovies, undefined), mockMovies);
+    });
+
+    it('AC-07.6 se aplica después de filtrar (combina con categoría, género, búsqueda y minRating)', () => {
+      const filtered = filterMovies(mockMovies, { category: 'popular', minRating: 5 });
+      assert.deepEqual(sortMovies(filtered, 'rating').map(m => m.id), [1, 2, 3]);
+      assert.deepEqual(sortMovies(filtered, 'release_date').map(m => m.id), [3, 2, 1]);
+      assert.deepEqual(
+        sortMovies(filterMovies(mockMovies, { genre: 'Drama' }), 'release_date').map(m => m.id),
+        [3, 4]
+      );
+      assert.deepEqual(
+        sortMovies(filterMovies(mockMovies, { search: 'zzz-sin-coincidencias' }), 'rating'),
+        []
+      );
+    });
+
+    it('películas sin valor de orden válido quedan al final en su orden original', () => {
+      const partial = [
+        { id: 1, vote_average: null, release_date: '' },
+        { id: 2, vote_average: 6, release_date: '2021-01-01' },
+        { id: 3 },
+        { id: 4, vote_average: 9, release_date: '2023-01-01' }
+      ];
+      assert.deepEqual(sortMovies(partial, 'rating').map(m => m.id), [4, 2, 1, 3]);
+      assert.deepEqual(sortMovies(partial, 'release_date').map(m => m.id), [4, 2, 1, 3]);
+    });
+
+    it('debe manejar entradas inválidas sin lanzar error', () => {
+      assert.deepEqual(sortMovies(null, 'rating'), []);
+      assert.deepEqual(sortMovies('no-es-arreglo', 'rating'), []);
+    });
+
+    it('NFR-02 ordenar no muta el arreglo de entrada y devuelve una copia', () => {
+      const snapshot = JSON.parse(JSON.stringify(tieMovies));
+      const sorted = sortMovies(tieMovies, 'rating');
+      assert.notEqual(sorted, tieMovies);
+      assert.deepEqual(tieMovies, snapshot);
+      assert.notEqual(sortMovies(tieMovies), tieMovies);
+    });
+  });
+
+  describe('parseSortBy()', () => {
+    it('AC-07.5 parámetro ausente es válido y sin efecto', () => {
+      assert.deepEqual(parseSortBy(undefined), { valid: true, value: null, error: null });
+    });
+
+    it('AC-07.1 / AC-07.2 acepta "rating" y "release_date"', () => {
+      assert.deepEqual(parseSortBy('rating'), { valid: true, value: 'rating', error: null });
+      assert.deepEqual(parseSortBy('release_date'), { valid: true, value: 'release_date', error: null });
+    });
+
+    it('AC-07.4 rechaza cualquier otro valor', () => {
+      const invalidInputs = [
+        'title', '', ' ', 'RATING', 'Rating', ' rating', 'rating ', 'release-date',
+        'vote_average', 'toString', '__proto__', ['rating', 'release_date'], { a: '1' }, null, 7
+      ];
+      for (const raw of invalidInputs) {
+        const parsed = parseSortBy(raw);
         assert.equal(parsed.valid, false, `${JSON.stringify(raw)} debería ser inválido`);
         assert.equal(parsed.value, null);
         assert.equal(typeof parsed.error, 'string');

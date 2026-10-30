@@ -1,4 +1,4 @@
-// HTTP-level regression tests for the REST API (FR-01..FR-04).
+// HTTP-level regression tests for the REST API (FR-01..FR-04, FR-06, FR-07).
 // The app is started in-process on a random port; no external server is needed.
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -118,6 +118,113 @@ describe('API: GET /api/movies?min_rating (FR-06)', () => {
     await get('/api/movies?min_rating=9');
     const { body } = await get('/api/movies');
     assert.equal(body.total_results, catalog.length);
+  });
+});
+
+describe('API: GET /api/movies?sort_by (FR-07)', () => {
+  // Orden esperado calculado de forma independiente: descendente y estable (índice del catálogo como desempate)
+  const expectedOrder = (list, key) => list
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => {
+      if (a.m[key] === b.m[key]) return a.i - b.i;
+      return a.m[key] > b.m[key] ? -1 : 1;
+    })
+    .map(({ m }) => m.id);
+
+  it('AC-07.1 sort_by=rating orders results by vote_average descending', async () => {
+    const { status, body } = await get('/api/movies?sort_by=rating');
+    assert.equal(status, 200);
+    assert.equal(body.total_results, catalog.length);
+    assert.equal(body.results.length, catalog.length);
+    for (let i = 1; i < body.results.length; i++) {
+      assert.ok(body.results[i - 1].vote_average >= body.results[i].vote_average);
+    }
+    assert.deepEqual(body.results.map(m => m.id), expectedOrder(catalog, 'vote_average'));
+  });
+
+  it('AC-07.2 sort_by=release_date orders results newest first', async () => {
+    const { status, body } = await get('/api/movies?sort_by=release_date');
+    assert.equal(status, 200);
+    assert.equal(body.total_results, catalog.length);
+    for (let i = 1; i < body.results.length; i++) {
+      assert.ok(body.results[i - 1].release_date >= body.results[i].release_date);
+    }
+    assert.deepEqual(body.results.map(m => m.id), expectedOrder(catalog, 'release_date'));
+  });
+
+  it('AC-07.3 ties keep the original catalog order (stable sort)', async () => {
+    const { body } = await get('/api/movies?sort_by=rating');
+    const ids = body.results.map(m => m.id);
+    const scores = new Set(catalog.map(m => m.vote_average));
+    let tieGroups = 0;
+    for (const score of scores) {
+      const catalogIds = catalog.filter(m => m.vote_average === score).map(m => m.id);
+      if (catalogIds.length < 2) continue;
+      tieGroups++;
+      const responseIds = ids.filter(id => catalogIds.includes(id));
+      assert.deepEqual(responseIds, catalogIds, `ties for vote_average=${score} must keep catalog order`);
+    }
+    assert.ok(tieGroups > 0, 'the fixture must contain ties to verify stability');
+  });
+
+  for (const raw of ['title', '', 'RATING', 'vote_average', 'release-date']) {
+    it(`AC-07.4 returns 400 with { error } and no results for sort_by=${JSON.stringify(raw)}`, async () => {
+      const { status, body } = await get(`/api/movies?sort_by=${encodeURIComponent(raw)}`);
+      assert.equal(status, 400);
+      assert.equal(typeof body.error, 'string');
+      assert.ok(body.error.length > 0);
+      assert.equal(body.results, undefined);
+      assert.equal(body.total_results, undefined);
+    });
+  }
+
+  it('AC-07.4 returns 400 for a repeated sort_by parameter', async () => {
+    const { status, body } = await get('/api/movies?sort_by=rating&sort_by=release_date');
+    assert.equal(status, 400);
+    assert.ok(body.error);
+    assert.equal(body.results, undefined);
+  });
+
+  it('AC-07.5 without sort_by the original catalog order is preserved', async () => {
+    const { status, body } = await get('/api/movies');
+    assert.equal(status, 200);
+    assert.deepEqual(body.results, catalog);
+  });
+
+  it('AC-07.6 sort_by combines with FR-01 / FR-06 filters; sorting is applied after filtering', async () => {
+    const { status, body } = await get('/api/movies?category=popular&genre=drama&min_rating=7&sort_by=rating');
+    const filtered = catalog.filter(m =>
+      m.category.includes('popular') &&
+      m.genres.some(g => g.toLowerCase() === 'drama') &&
+      m.vote_average >= 7);
+    assert.equal(status, 200);
+    assert.ok(filtered.length > 1);
+    assert.equal(body.total_results, filtered.length);
+    assert.deepEqual(body.results.map(m => m.id), expectedOrder(filtered, 'vote_average'));
+
+    const byDate = await get('/api/movies?category=top_rated&sort_by=release_date');
+    const topRated = catalog.filter(m => m.category.includes('top_rated'));
+    assert.deepEqual(byDate.body.results.map(m => m.id), expectedOrder(topRated, 'release_date'));
+
+    const term = catalog[0].title;
+    const withSearch = await get(`/api/movies?search=${encodeURIComponent(term)}&sort_by=rating`);
+    const searched = catalog.filter(m =>
+      [m.title, m.original_title, m.overview].some(f => f && f.toLowerCase().includes(term.toLowerCase())));
+    assert.deepEqual(withSearch.body.results.map(m => m.id), expectedOrder(searched, 'vote_average'));
+  });
+
+  it('AC-07.6 an invalid min_rating still returns 400 when sort_by is valid', async () => {
+    const { status, body } = await get('/api/movies?min_rating=abc&sort_by=rating');
+    assert.equal(status, 400);
+    assert.ok(body.error);
+    assert.equal(body.results, undefined);
+  });
+
+  it('NFR-02 a sort_by request does not mutate the in-memory catalog order', async () => {
+    await get('/api/movies?sort_by=rating');
+    await get('/api/movies?sort_by=release_date');
+    const { body } = await get('/api/movies');
+    assert.deepEqual(body.results.map(m => m.id), catalog.map(m => m.id));
   });
 });
 
